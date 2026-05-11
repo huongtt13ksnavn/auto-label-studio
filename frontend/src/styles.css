@@ -184,10 +184,19 @@ input[type="text"], input[type="number"], select {
   display: inline-block;
   padding: 1px 6px;
   border-radius: 3px;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: var(--text);
   font-family: ui-monospace, monospace;
   font-size: 11px;
+  line-height: 1.4;
+}
+
+/* On the light primary button, invert kbd so it remains readable */
+button.primary .kbd {
+  background: rgba(0, 0, 0, 0.18);
+  border-color: rgba(0, 0, 0, 0.28);
+  color: #0a0c10;
 }
 
 .muted { color: var(--muted); font-size: 12px; }
