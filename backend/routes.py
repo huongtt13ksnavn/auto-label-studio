@@ -48,7 +48,7 @@ def create_dataset(payload: schemas.DatasetCreate, db: Session = Depends(get_db)
     existing = db.query(models.Dataset).filter(models.Dataset.name == payload.name).first()
     if existing:
         raise HTTPException(400, f"Dataset '{payload.name}' already exists")
-    ds = models.Dataset(name=payload.name, class_name=payload.class_name)
+    ds = models.Dataset(name=payload.name, class_names=list(payload.class_names))
     db.add(ds)
     db.commit()
     db.refresh(ds)
@@ -68,6 +68,35 @@ def get_dataset(dataset_id: int, db: Session = Depends(get_db)):
     return _dataset_to_out(ds, db)
 
 
+@router.delete("/datasets/{dataset_id}", status_code=204)
+def delete_dataset(dataset_id: int, db: Session = Depends(get_db)):
+    ds = _require_dataset(db, dataset_id)
+
+    # collect run dirs before the DB rows go away
+    runs = (
+        db.query(models.TrainingRun)
+        .filter(models.TrainingRun.dataset_id == ds.id)
+        .all()
+    )
+    run_artifact_dirs: list[Path] = []
+    for run in runs:
+        run_artifact_dirs.append(TRAIN_DIRS / f"ds{ds.id}_run{run.id}")
+        run_artifact_dirs.append(RUNS_DIR / f"ds{ds.id}_run{run.id}")
+        db.delete(run)
+
+    # cascade-delete images + boxes via ORM (Dataset.images cascade="all, delete-orphan")
+    db.delete(ds)
+    db.commit()
+
+    # disk cleanup, best-effort (do not 500 the API on FS errors)
+    images_dir = IMAGES_DIR / str(ds.id)
+    for path in [images_dir, *run_artifact_dirs]:
+        if path.exists():
+            shutil.rmtree(path, ignore_errors=True)
+
+    return None
+
+
 def _dataset_to_out(ds: models.Dataset, db: Session) -> schemas.DatasetOut:
     image_count = db.query(models.Image).filter(models.Image.dataset_id == ds.id).count()
     labeled_count = (
@@ -81,7 +110,7 @@ def _dataset_to_out(ds: models.Dataset, db: Session) -> schemas.DatasetOut:
     return schemas.DatasetOut(
         id=ds.id,
         name=ds.name,
-        class_name=ds.class_name,
+        class_names=list(ds.class_names or []),
         created_at=ds.created_at,
         image_count=image_count,
         labeled_count=labeled_count,
@@ -332,7 +361,7 @@ def _run_training(run_id: int, dataset_id: int, epochs: int, img_size: int) -> N
             return
 
         export_yolo_layout(layout_dir, images_for_train, val_split=0.2)
-        ds_yaml = _dataset_yaml(layout_dir, ds.class_name)
+        ds_yaml = _dataset_yaml(layout_dir, list(ds.class_names or ["object"]))
 
         backend = get_backend()
         try:
@@ -519,13 +548,16 @@ def export_yolo(dataset_id: int, db: Session = Depends(get_db)):
         raise HTTPException(400, "No reviewed/labeled images to export.")
 
     buffer = io.BytesIO()
+    names_lines = "\n".join(
+        f"  {i}: {n}" for i, n in enumerate(ds.class_names or ["object"])
+    )
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr(
             "dataset.yaml",
             "path: ./\n"
             "train: images/train\n"
             "val: images/val\n"
-            f"names:\n  0: {ds.class_name}\n",
+            f"names:\n{names_lines}\n",
         )
         n = len(rows)
         val_count = max(1, int(n * 0.2)) if n > 1 else 0

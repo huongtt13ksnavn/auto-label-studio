@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Stage, Layer, Image as KImage, Rect, Text, Group } from "react-konva";
 import Konva from "konva";
 import type { Box, ImageRecord } from "../types";
+import { classColor, classLabel } from "../classColor";
 
 interface Props {
   image: ImageRecord;
@@ -10,6 +11,8 @@ interface Props {
   onChange: (boxes: Box[]) => void;
   selectedIdx: number | null;
   setSelectedIdx: (i: number | null) => void;
+  classNames: string[];
+  activeClassIdx: number;
 }
 
 export function BboxCanvas({
@@ -19,6 +22,8 @@ export function BboxCanvas({
   onChange,
   selectedIdx,
   setSelectedIdx,
+  classNames,
+  activeClassIdx,
 }: Props) {
   const stageRef = useRef<Konva.Stage>(null);
   const [imgEl, setImgEl] = useState<HTMLImageElement | null>(null);
@@ -104,7 +109,7 @@ export function BboxCanvas({
       cy: norm.cy,
       w: norm.w,
       h: norm.h,
-      class_idx: 0,
+      class_idx: Math.max(0, Math.min(classNames.length - 1, activeClassIdx)),
       confidence: null,
       source: "human",
     };
@@ -164,8 +169,14 @@ export function BboxCanvas({
             const w = b.w * drawW;
             const h = b.h * drawH;
             const isSelected = i === selectedIdx;
-            const color = b.source === "model" ? "#ffb454" : "#4ea1ff";
+            const color = classColor(b.class_idx);
             const stroke = isSelected ? "#4ed489" : color;
+            const dash = b.source === "model" ? [6, 4] : undefined;
+            const name = classLabel(b.class_idx, classNames);
+            const label =
+              b.confidence != null
+                ? `${name} ${(b.confidence * 100).toFixed(0)}%`
+                : name;
             return (
               <Group key={i} onClick={() => setSelectedIdx(i)}>
                 <Rect
@@ -175,6 +186,7 @@ export function BboxCanvas({
                   height={h}
                   stroke={stroke}
                   strokeWidth={isSelected ? 3 : 2}
+                  dash={dash}
                   fill="transparent"
                   draggable={isSelected}
                   onDragEnd={(e) => {
@@ -188,11 +200,7 @@ export function BboxCanvas({
                   }}
                 />
                 <Text
-                  text={
-                    b.confidence != null
-                      ? `${b.source} ${(b.confidence * 100).toFixed(0)}%`
-                      : b.source
-                  }
+                  text={label}
                   fontSize={11}
                   fill={stroke}
                   x={x}

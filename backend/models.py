@@ -1,5 +1,6 @@
 from datetime import datetime
 from sqlalchemy import (
+    JSON,
     Column,
     DateTime,
     Float,
@@ -18,7 +19,8 @@ class Dataset(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False, unique=True)
-    class_name = Column(String, nullable=False, default="object")
+    # Ordered list of class names; index in list == YOLO class_idx on Box rows.
+    class_names = Column(JSON, nullable=False, default=list)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     images = relationship("Image", back_populates="dataset", cascade="all, delete-orphan")

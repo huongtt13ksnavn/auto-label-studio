@@ -44,13 +44,13 @@ def _have_ultralytics() -> bool:
         return False
 
 
-def _dataset_yaml(dataset_dir: Path, class_name: str) -> Path:
+def _dataset_yaml(dataset_dir: Path, class_names: list[str]) -> Path:
     yaml_path = dataset_dir / "dataset.yaml"
     config = {
         "path": str(dataset_dir.resolve()),
         "train": "images/train",
         "val": "images/val",
-        "names": {0: class_name},
+        "names": {i: n for i, n in enumerate(class_names)},
     }
     yaml_path.write_text(yaml.safe_dump(config))
     return yaml_path

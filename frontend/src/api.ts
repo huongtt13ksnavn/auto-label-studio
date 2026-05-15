@@ -15,12 +15,19 @@ export const api = {
 
   // datasets
   listDatasets: () => fetch(`${BASE}/datasets`).then((r) => j<Dataset[]>(r)),
-  createDataset: (name: string, class_name: string) =>
+  createDataset: (name: string, class_names: string[]) =>
     fetch(`${BASE}/datasets`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, class_name }),
+      body: JSON.stringify({ name, class_names }),
     }).then((r) => j<Dataset>(r)),
+  deleteDataset: async (id: number) => {
+    const res = await fetch(`${BASE}/datasets/${id}`, { method: "DELETE" });
+    if (!res.ok && res.status !== 204) {
+      const text = await res.text();
+      throw new Error(text || `${res.status} ${res.statusText}`);
+    }
+  },
 
   // images
   upload: async (datasetId: number, files: FileList | File[]) => {

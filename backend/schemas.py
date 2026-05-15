@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class BoxIn(BaseModel):
@@ -37,13 +37,28 @@ class ImageOut(BaseModel):
 
 class DatasetCreate(BaseModel):
     name: str
-    class_name: str = "object"
+    class_names: list[str] = Field(default_factory=lambda: ["object"], min_length=1)
+
+    @field_validator("class_names")
+    @classmethod
+    def _clean_class_names(cls, v: list[str]) -> list[str]:
+        cleaned = [s.strip() for s in v if s and s.strip()]
+        if not cleaned:
+            raise ValueError("class_names must contain at least one non-empty name")
+        # preserve order, drop dupes
+        seen: set[str] = set()
+        out: list[str] = []
+        for n in cleaned:
+            if n not in seen:
+                seen.add(n)
+                out.append(n)
+        return out
 
 
 class DatasetOut(BaseModel):
     id: int
     name: str
-    class_name: str
+    class_names: list[str]
     created_at: datetime
     image_count: int = 0
     labeled_count: int = 0

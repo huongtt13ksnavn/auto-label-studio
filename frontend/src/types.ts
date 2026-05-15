@@ -23,7 +23,7 @@ export interface ImageRecord {
 export interface Dataset {
   id: number;
   name: string;
-  class_name: string;
+  class_names: string[];
   created_at: string;
   image_count: number;
   labeled_count: number;
