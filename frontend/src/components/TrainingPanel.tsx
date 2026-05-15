@@ -43,6 +43,21 @@ export function TrainingPanel({ dataset, onRefresh }: Props) {
     }
   }
 
+  async function removeRun(runId: number, status: string) {
+    const verb = status === "failed" ? "Remove" : "Delete";
+    if (!window.confirm(
+      `${verb} run #${runId}? Weights and training artifacts on disk will also be removed.`
+    )) return;
+    try {
+      await api.deleteRun(runId);
+      setMsg(`Removed run #${runId}.`);
+      refresh();
+      onRefresh();
+    } catch (e: any) {
+      setMsg(`Remove failed: ${e.message}`);
+    }
+  }
+
   async function predict() {
     setBusy(true);
     setMsg(null);
@@ -98,13 +113,34 @@ export function TrainingPanel({ dataset, onRefresh }: Props) {
         <div className="list">
           {runs.map((r) => (
             <div key={r.id} className="list-item">
-              <div>
-                #{r.id} <span className="badge">{r.status}</span>
+              <div className="row" style={{ justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <div>
+                    #{r.id} <span className="badge">{r.status}</span>
+                  </div>
+                  <div className="muted">
+                    {r.epochs} epochs • {r.finished_at ? "done" : "running"}
+                  </div>
+                  {r.log && <div className="muted">{r.log}</div>}
+                </div>
+                {r.status !== "running" && (
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => removeRun(r.id, r.status)}
+                    title={`Remove run #${r.id}`}
+                    aria-label={`Remove run #${r.id}`}
+                    style={{
+                      padding: "2px 6px",
+                      fontSize: 14,
+                      lineHeight: 1,
+                      color: "var(--muted)",
+                    }}
+                  >
+                    ×
+                  </button>
+                )}
               </div>
-              <div className="muted">
-                {r.epochs} epochs • {r.finished_at ? "done" : "running"}
-              </div>
-              {r.log && <div className="muted">{r.log}</div>}
             </div>
           ))}
         </div>

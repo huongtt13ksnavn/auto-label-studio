@@ -340,6 +340,7 @@ def _run_training(run_id: int, dataset_id: int, epochs: int, img_size: int) -> N
         layout_dir.mkdir(exist_ok=True)
 
         images_for_train = []
+        positives = 0
         for img in labeled:
             src = IMAGES_DIR / str(ds.id) / img.filename
             if not src.exists():
@@ -347,10 +348,13 @@ def _run_training(run_id: int, dataset_id: int, epochs: int, img_size: int) -> N
             boxes = [
                 (b.cx, b.cy, b.w, b.h, b.class_idx)
                 for b in img.boxes
-                if b.source in ("human",) or b.source == "model"
+                if b.source in ("human", "model")
             ]
-            if not boxes:
-                continue
+            # YOLO accepts empty label files as background/negative examples.
+            # Keeping them in the set avoids val-split collapsing to zero when
+            # most labeled images have no objects.
+            if boxes:
+                positives += 1
             images_for_train.append((src, boxes))
 
         if not images_for_train:
@@ -359,7 +363,29 @@ def _run_training(run_id: int, dataset_id: int, epochs: int, img_size: int) -> N
             run.finished_at = datetime.utcnow()
             db.commit()
             return
+        if positives == 0:
+            run.status = "failed"
+            run.log = (
+                "All labeled images have zero boxes. Train needs at least one "
+                "image with a drawn box; the rest can be background samples."
+            )
+            run.finished_at = datetime.utcnow()
+            db.commit()
+            return
+        if len(images_for_train) < 2:
+            run.status = "failed"
+            run.log = (
+                f"Only {len(images_for_train)} usable image(s) on disk after "
+                "filtering. Need at least 2 so the val split is non-empty."
+            )
+            run.finished_at = datetime.utcnow()
+            db.commit()
+            return
 
+        # export_yolo_layout assigns the first val_count items to val.
+        # Sort backgrounds first so positives prefer the train split — keeps
+        # the model from training on nothing if positives are scarce.
+        images_for_train.sort(key=lambda pair: 1 if pair[1] else 0)
         export_yolo_layout(layout_dir, images_for_train, val_split=0.2)
         ds_yaml = _dataset_yaml(layout_dir, list(ds.class_names or ["object"]))
 
@@ -408,6 +434,32 @@ def get_run(run_id: int, db: Session = Depends(get_db)):
     if not run:
         raise HTTPException(404, "Run not found")
     return run
+
+
+@router.delete("/runs/{run_id}", status_code=204)
+def delete_run(run_id: int, db: Session = Depends(get_db)):
+    run = db.query(models.TrainingRun).get(run_id)
+    if not run:
+        raise HTTPException(404, "Run not found")
+    if run.status == "running":
+        raise HTTPException(
+            409, "Run is still running. Wait for it to finish or fail first."
+        )
+
+    ds_id = run.dataset_id
+    artifact_dirs = [
+        TRAIN_DIRS / f"ds{ds_id}_run{run.id}",
+        RUNS_DIR / f"ds{ds_id}_run{run.id}",
+    ]
+
+    db.delete(run)
+    db.commit()
+
+    for path in artifact_dirs:
+        if path.exists():
+            shutil.rmtree(path, ignore_errors=True)
+
+    return None
 
 
 # ----- prediction -----

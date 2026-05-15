@@ -70,6 +70,13 @@ export const api = {
     }).then((r) => j<TrainingRun>(r)),
   listRuns: (datasetId: number) =>
     fetch(`${BASE}/datasets/${datasetId}/runs`).then((r) => j<TrainingRun[]>(r)),
+  deleteRun: async (runId: number) => {
+    const res = await fetch(`${BASE}/runs/${runId}`, { method: "DELETE" });
+    if (!res.ok && res.status !== 204) {
+      const text = await res.text();
+      throw new Error(text || `${res.status} ${res.statusText}`);
+    }
+  },
 
   // predict
   predictUnlabeled: (datasetId: number, conf_threshold = 0.25) =>
