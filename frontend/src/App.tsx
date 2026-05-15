@@ -20,8 +20,20 @@ export default function App() {
   const [dirty, setDirty] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string>("");
   const [activeClassIdx, setActiveClassIdx] = useState(0);
+  const [datasetRefreshTick, setDatasetRefreshTick] = useState(0);
 
   const classNames = dataset?.class_names ?? [];
+
+  async function refreshDatasetCounts() {
+    if (!dataset) return;
+    try {
+      const fresh = await api.getDataset(dataset.id);
+      setDataset(fresh);
+      setDatasetRefreshTick((n) => n + 1);
+    } catch {
+      // non-fatal: counts will catch up on next dataset pick
+    }
+  }
 
   // reset active class when switching datasets
   useEffect(() => {
@@ -87,6 +99,7 @@ export default function App() {
           : `Saved #${updated.id} (${updated.boxes.length} boxes)`
       );
       // index stays, so the next image slides in
+      refreshDatasetCounts();
     } catch (e: any) {
       setStatusMsg(`Save failed: ${e.message}`);
     }
@@ -103,6 +116,7 @@ export default function App() {
       );
       setImages((prev) => prev.filter((p) => p.id !== updated.id));
       setStatusMsg(`Approved #${updated.id}`);
+      refreshDatasetCounts();
     } catch (e: any) {
       setStatusMsg(`Approve failed: ${e.message}`);
     }
@@ -183,11 +197,27 @@ export default function App() {
 
       <div className="layout">
         <aside className="sidebar">
-          <DatasetPicker current={dataset} onSelect={setDataset} />
+          <DatasetPicker
+            current={dataset}
+            onSelect={setDataset}
+            refreshTick={datasetRefreshTick}
+          />
           {dataset && (
             <>
-              <Upload datasetId={dataset.id} onUploaded={() => refreshImages()} />
-              <TrainingPanel dataset={dataset} onRefresh={() => refreshImages()} />
+              <Upload
+                datasetId={dataset.id}
+                onUploaded={() => {
+                  refreshImages();
+                  refreshDatasetCounts();
+                }}
+              />
+              <TrainingPanel
+                dataset={dataset}
+                onRefresh={() => {
+                  refreshImages();
+                  refreshDatasetCounts();
+                }}
+              />
             </>
           )}
         </aside>

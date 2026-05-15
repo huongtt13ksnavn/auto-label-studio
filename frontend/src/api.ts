@@ -15,6 +15,8 @@ export const api = {
 
   // datasets
   listDatasets: () => fetch(`${BASE}/datasets`).then((r) => j<Dataset[]>(r)),
+  getDataset: (id: number) =>
+    fetch(`${BASE}/datasets/${id}`).then((r) => j<Dataset>(r)),
   createDataset: (name: string, class_names: string[]) =>
     fetch(`${BASE}/datasets`, {
       method: "POST",

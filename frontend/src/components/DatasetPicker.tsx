@@ -5,6 +5,8 @@ import { api } from "../api";
 interface Props {
   current: Dataset | null;
   onSelect: (d: Dataset | null) => void;
+  /** Bump to force a re-fetch of the dataset list (e.g. after labels change). */
+  refreshTick?: number;
 }
 
 function normalize(input: string): string[] {
@@ -14,7 +16,7 @@ function normalize(input: string): string[] {
     .filter(Boolean);
 }
 
-export function DatasetPicker({ current, onSelect }: Props) {
+export function DatasetPicker({ current, onSelect, refreshTick = 0 }: Props) {
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -30,7 +32,7 @@ export function DatasetPicker({ current, onSelect }: Props) {
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [refreshTick]);
 
   function addClasses(raw: string) {
     const next = normalize(raw);
