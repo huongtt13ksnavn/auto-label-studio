@@ -125,6 +125,9 @@ class UltralyticsBackend(ModelBackend):
         from ultralytics import YOLO
 
         model = YOLO(self.BASE_WEIGHTS)
+        # workers=0 avoids Windows multiprocessing spawn failure when the
+        # training call runs inside a FastAPI BackgroundTask (no __main__
+        # guard available). Slower than parallel loaders but stable.
         result = model.train(
             data=str(dataset_yaml),
             epochs=epochs,
@@ -134,6 +137,7 @@ class UltralyticsBackend(ModelBackend):
             exist_ok=True,
             verbose=False,
             patience=10,
+            workers=0,
         )
         # result.save_dir holds the run directory; best weights at weights/best.pt
         save_dir = Path(result.save_dir) if hasattr(result, "save_dir") else project_dir / run_name
