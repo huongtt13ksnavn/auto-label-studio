@@ -58,33 +58,33 @@ def _dataset_yaml(dataset_dir: Path, class_names: list[str]) -> Path:
 
 def export_yolo_layout(
     dataset_dir: Path,
-    images: list[tuple[Path, list[tuple[float, float, float, float, int]]]],
-    val_split: float = 0.2,
+    train_images: list[tuple[Path, list[tuple[float, float, float, float, int]]]],
+    val_images: list[tuple[Path, list[tuple[float, float, float, float, int]]]],
 ) -> Path:
     """Write images + labels into ultralytics layout under dataset_dir.
 
-    images: list of (source_image_path, list of (cx, cy, w, h, class_idx))
+    Each item: (source_image_path, list of (cx, cy, w, h, class_idx)).
+    Caller is responsible for stratifying positives across splits so val
+    contains at least one labeled instance (otherwise ultralytics emits
+    "no labels found in detect set" and skips metrics).
     """
     for split in ("train", "val"):
         (dataset_dir / "images" / split).mkdir(parents=True, exist_ok=True)
         (dataset_dir / "labels" / split).mkdir(parents=True, exist_ok=True)
 
-    n = len(images)
-    val_count = max(1, int(n * val_split)) if n > 1 else 0
+    for split, items in (("train", train_images), ("val", val_images)):
+        for src, boxes in items:
+            img_dst = dataset_dir / "images" / split / src.name
+            label_dst = dataset_dir / "labels" / split / f"{src.stem}.txt"
 
-    for i, (src, boxes) in enumerate(images):
-        split = "val" if i < val_count else "train"
-        img_dst = dataset_dir / "images" / split / src.name
-        label_dst = dataset_dir / "labels" / split / f"{src.stem}.txt"
+            if not img_dst.exists():
+                shutil.copy2(src, img_dst)
 
-        if not img_dst.exists():
-            shutil.copy2(src, img_dst)
-
-        lines = [
-            f"{cls} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}"
-            for (cx, cy, w, h, cls) in boxes
-        ]
-        label_dst.write_text("\n".join(lines))
+            lines = [
+                f"{cls} {cx:.6f} {cy:.6f} {w:.6f} {h:.6f}"
+                for (cx, cy, w, h, cls) in boxes
+            ]
+            label_dst.write_text("\n".join(lines))
 
     return dataset_dir
 

@@ -382,11 +382,28 @@ def _run_training(run_id: int, dataset_id: int, epochs: int, img_size: int) -> N
             db.commit()
             return
 
-        # export_yolo_layout assigns the first val_count items to val.
-        # Sort backgrounds first so positives prefer the train split — keeps
-        # the model from training on nothing if positives are scarce.
-        images_for_train.sort(key=lambda pair: 1 if pair[1] else 0)
-        export_yolo_layout(layout_dir, images_for_train, val_split=0.2)
+        # Stratified split. Val must contain at least one positive or
+        # ultralytics warns "no labels found in detect set" and skips
+        # metrics. Train should also keep positives so the model learns.
+        positives_list = [p for p in images_for_train if p[1]]
+        backgrounds_list = [p for p in images_for_train if not p[1]]
+        val_ratio = 0.2
+
+        if len(positives_list) >= 2:
+            val_pos = max(1, int(len(positives_list) * val_ratio))
+            val_bg = int(len(backgrounds_list) * val_ratio)
+            val_items = positives_list[:val_pos] + backgrounds_list[:val_bg]
+            train_items = positives_list[val_pos:] + backgrounds_list[val_bg:]
+        else:
+            # Only one positive: duplicate it across both splits so val gets
+            # a labeled instance and train still sees the object.
+            val_items = positives_list[:] + backgrounds_list[:1]
+            train_items = positives_list[:] + backgrounds_list[1:]
+            if not val_items:
+                val_items = train_items[:1]
+                train_items = train_items[1:]
+
+        export_yolo_layout(layout_dir, train_items, val_items)
         ds_yaml = _dataset_yaml(layout_dir, list(ds.class_names or ["object"]))
 
         backend = get_backend()
